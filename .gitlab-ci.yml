@@ -1,0 +1,68 @@
+# (c) https://github.com/MontiCore/monticore  
+image: registry.git.rwth-aachen.de/monticore/container-registry/gradle:6.8.2-jdk8
+
+# These are the default stages. You don't need to explicitly define them. But you could define any stages you need.
+stages:
+  - build
+#  - test
+  - report
+  
+before_script:
+  - export GRADLE_USER_HOME=`pwd`/.gradle
+
+variables:
+  # This will supress any download for dependencies and plugins or upload messages which would clutter the console log.
+  # `showDateTime` will show the passed time in milliseconds. You need to specify `--batch-mode` to make this work.
+  MAVEN_OPTS: "-Xmx4096m -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=WARN -Dorg.slf4j.simpleLogger.showDateTime=true -Djava.awt.headless=true -Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository"
+  # `installAtEnd` and `deployAtEnd`are only effective with recent version of the corresponding plugins.
+  MAVEN_CLI_OPTS: "--batch-mode --errors --fail-at-end --show-version -DinstallAtEnd=true"
+
+
+build:
+  stage: build
+  image: maven:3.5.4-jdk-8-alpine
+  script:
+    - mvn $MAVEN_CLI_OPTS clean install -U
+  artifacts:
+    reports:
+      junit:
+        - ./target/surefire-reports/TEST-*.xml
+
+build_gradle:
+  stage: build
+  script:
+    - "gradle assemble"
+    - "gradle testReport"
+  artifacts:
+    paths:
+      - "target"
+    expire_in: 1 week
+
+#test_gradle:
+#  stage: test
+#  dependencies:
+#    - build_gradle
+#  cache:
+#    paths:
+#      - .gradle/wrapper
+#      - .gradle/caches
+#    key: ${CI_COMMIT_REF_SLUG}-gradle
+#  script:
+#    - "gradle testReport"
+#  artifacts:
+#    paths:
+#      - "target"
+#    expire_in: 1 week
+
+pages:
+  stage: report
+  dependencies:
+    - build_gradle
+  cache: {}
+  script:
+    - mv target/reports/allTests public
+  artifacts:
+    paths:
+      - public
+  only:
+    - master
